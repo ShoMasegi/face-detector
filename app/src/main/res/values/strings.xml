@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">FaceDetector</string>
+    <string name="error_image_not_set">Image not set.</string>
+    <string name="error_face_detection">Failed to face detection.</string>
 </resources>

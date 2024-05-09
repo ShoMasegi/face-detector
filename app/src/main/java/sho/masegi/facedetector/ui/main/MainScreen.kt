@@ -36,11 +36,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -48,16 +50,24 @@ import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import sho.masegi.facedetector.R
+import sho.masegi.facedetector.ui.imageprocessor.FaceDetectionResult
+import sho.masegi.facedetector.ui.imageprocessor.FaceDetectorProcessor
 import sho.masegi.facedetector.ui.result.FaceDetectResultBottomSheetContent
 import sho.masegi.facedetector.ui.theme.FaceDetectorTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MainScreen() {
-  val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+  val bottomSheetState = rememberModalBottomSheetState()
   val snackbarHostState = remember { SnackbarHostState() }
   var showBottomSheet by remember { mutableStateOf(false) }
+  val coroutineScope = rememberCoroutineScope()
+  val context = LocalContext.current
+  val faceDetector = remember { FaceDetectorProcessor(context) }
+  var faceDetectionResults: List<FaceDetectionResult>? by remember { mutableStateOf(null) }
+  var isLoading by remember { mutableStateOf(false) }
 
   Scaffold(
     topBar = {
@@ -71,14 +81,38 @@ internal fun MainScreen() {
     modifier = Modifier.fillMaxSize(),
   ) { contentPadding ->
     Box(modifier = Modifier.padding(contentPadding)) {
-      MainContent()
+      MainContent(
+        isLoading = isLoading,
+        onFaceDetectionClick = { imageUri ->
+          coroutineScope.launch {
+            faceDetectionResults = null
+            showBottomSheet = false
 
-      if (showBottomSheet) {
+            if (imageUri != Uri.EMPTY) {
+              try {
+                isLoading = true
+                faceDetectionResults = faceDetector.detect(imageUri)
+                showBottomSheet = true
+                isLoading = false
+              } catch (e: Exception) {
+                isLoading = false
+                snackbarHostState.showSnackbar("${context.getString(R.string.error_face_detection)} ${e.localizedMessage}")
+              }
+            } else {
+              snackbarHostState.showSnackbar(context.getString(R.string.error_image_not_set))
+            }
+          }
+        }
+      )
+
+      if (showBottomSheet && faceDetectionResults != null) {
         ModalBottomSheet(
           onDismissRequest = { showBottomSheet = false },
           sheetState = bottomSheetState,
         ) {
-          FaceDetectResultBottomSheetContent()
+          FaceDetectResultBottomSheetContent(
+            faceDetectionResults = faceDetectionResults!!,
+          )
         }
       }
     }
@@ -88,11 +122,12 @@ internal fun MainScreen() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MainContent(
+  isLoading: Boolean,
+  onFaceDetectionClick: (Uri) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val selectableLogics = FaceDetectLogic.entries
-  var selectedLogic by remember { mutableStateOf(FaceDetectLogic.FACE_DETECT) }
-  var isLoading by remember { mutableStateOf(false) }
+  var selectedLogic by remember { mutableStateOf(FaceDetectLogic.FIREBASE_ML) }
 
   var pickedImageUri by remember { mutableStateOf(Uri.EMPTY) }
   val pickVisualMediaLauncher = rememberLauncherForActivityResult(
@@ -135,15 +170,16 @@ internal fun MainContent(
             shape = SegmentedButtonDefaults.itemShape(
               index = index,
               count = selectableLogics.size,
-            )
+            ),
+            enabled = false,
           ) {
-            Text(text = logic.title,)
+            Text(text = logic.title)
           }
         }
       }
 
       Button(
-        onClick = { isLoading = !isLoading },
+        onClick = { onFaceDetectionClick(pickedImageUri) },
         modifier = Modifier.width(156.dp),
       ) {
         if (isLoading) {

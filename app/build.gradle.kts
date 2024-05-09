@@ -58,6 +58,10 @@ dependencies {
   implementation(libs.material3)
   implementation(libs.coil)
   implementation(libs.coil.compose)
+  implementation(libs.mlkit.facedetection)
+  implementation(libs.kotlinx.coroutines.core)
+  implementation(libs.kotlinx.coroutines.play.services)
+
   testImplementation(libs.junit)
   androidTestImplementation(libs.androidx.test.ext.junit)
   androidTestImplementation(libs.espresso.core)
